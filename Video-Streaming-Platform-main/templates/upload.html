@@ -1,0 +1,246 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Video - Video Streaming Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .upload-box {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            transition: opacity 0.3s ease;
+        }
+
+        .back-link:hover {
+            opacity: 0.8;
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2em;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        input[type="text"],
+        input[type="file"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 1em;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="file"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        input[type="file"] {
+            cursor: pointer;
+        }
+
+        .file-label {
+            display: block;
+            padding: 40px;
+            border: 2px dashed #667eea;
+            border-radius: 5px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9ff;
+        }
+
+        .file-label:hover {
+            background: #f0f2ff;
+            border-color: #764ba2;
+        }
+
+        .file-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .file-text {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        input[type="file"]::-webkit-file-upload-button {
+            display: none;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        button,
+        .btn-cancel {
+            flex: 1;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+        }
+
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-cancel {
+            background: #f0f0f0;
+            color: #666;
+            border: 2px solid #e0e0e0;
+        }
+
+        .btn-cancel:hover {
+            background: #e8e8e8;
+        }
+
+        .info-text {
+            color: #999;
+            font-size: 0.85em;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .upload-box {
+                padding: 25px;
+            }
+
+            h2 {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Videos</a>
+        <div class="upload-box">
+            <h2>Upload Video</h2>
+            <form method="post" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="title">Video Title</label>
+                    <input type="text" id="title" name="title" placeholder="Enter video title" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="video">Select Video File</label>
+                    <div class="file-label" id="fileLabel">
+                        <div class="file-icon">📹</div>
+                        <div class="file-text">Click to select or drag and drop</div>
+                        <div class="info-text">MP4, WebM, or other video formats</div>
+                    </div>
+                    <input type="file" id="video" name="video" accept="video/*" required style="display: none;">
+                </div>
+
+                <div class="button-group">
+                    <button type="submit">Upload Video</button>
+                    <a href="/" class="btn-cancel">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const fileLabel = document.getElementById('fileLabel');
+        const fileInput = document.getElementById('video');
+
+        fileLabel.addEventListener('click', () => fileInput.click());
+
+        fileLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileLabel.style.background = '#f0f2ff';
+            fileLabel.style.borderColor = '#764ba2';
+        });
+
+        fileLabel.addEventListener('dragleave', () => {
+            fileLabel.style.background = '#f8f9ff';
+            fileLabel.style.borderColor = '#667eea';
+        });
+
+        fileLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileInput.files = e.dataTransfer.files;
+            const fileName = fileInput.files[0]?.name || 'File selected';
+            fileLabel.innerHTML = `<div class="file-icon">✓</div><div class="file-text">${fileName}</div>`;
+        });
+
+        fileInput.addEventListener('change', () => {
+            const fileName = fileInput.files[0]?.name || 'File selected';
+            fileLabel.innerHTML = `<div class="file-icon">✓</div><div class="file-text">${fileName}</div>`;
+        });
+    </script>
+</body>
+</html>
