@@ -1,85 +1,207 @@
-
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-import sqlite3, os
+ 
+import os
+import sqlite3
+from flask import Flask, render_template, request, redirect, url_for, abort
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-UPLOAD_FOLDER = "static/uploads"
-DB = "videos.db"
+# --------------------------------------------------
+# PROJECT PATHS
+# --------------------------------------------------
+
+# Project root is the parent directory of the video folder
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+TEMPLATE_FOLDER = os.path.join(BASE_DIR, "templates")
+STATIC_FOLDER = os.path.join(BASE_DIR, "static")
+UPLOAD_FOLDER = os.path.join(STATIC_FOLDER, "uploads")
+DATABASE = os.path.join(BASE_DIR, "videos.db")
+
+# --------------------------------------------------
+# FLASK CONFIGURATION
+# --------------------------------------------------
+
+app = Flask(
+    __name__,
+    template_folder=TEMPLATE_FOLDER,
+    static_folder=STATIC_FOLDER
+)
+
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024  # 1 GB upload limit
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+
+# --------------------------------------------------
+# DATABASE
+# --------------------------------------------------
+
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def init_db():
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS videos(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        filename TEXT
-    )
-    """)
-    conn.commit()
-    conn.close()
+    with get_db_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                filename TEXT NOT NULL
+            )
+        """)
+
 
 init_db()
 
+
+# --------------------------------------------------
+# HOME PAGE
+# --------------------------------------------------
+
 @app.route("/")
 def index():
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM videos ORDER BY id DESC")
-    videos = cur.fetchall()
-    conn.close()
+    with get_db_connection() as conn:
+        videos = conn.execute(
+            "SELECT * FROM videos ORDER BY id DESC"
+        ).fetchall()
+
     return render_template("index.html", videos=videos)
 
-@app.route("/upload", methods=["GET","POST"])
+
+# --------------------------------------------------
+# UPLOAD VIDEO
+# --------------------------------------------------
+
+@app.route("/upload", methods=["GET", "POST"])
 def upload():
     if request.method == "POST":
-        title = request.form["title"]
-        file = request.files["video"]
+        title = request.form.get("title", "").strip()
+        uploaded_file = request.files.get("video")
 
-        if file:
-            filename = secure_filename(file.filename)
-            path = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(path)
+        if not title:
+            return "Please enter a video title.", 400
 
-            conn = sqlite3.connect(DB)
-            cur = conn.cursor()
-            cur.execute("INSERT INTO videos(title, filename) VALUES (?,?)",(title, filename))
-            conn.commit()
-            conn.close()
+        if not uploaded_file or not uploaded_file.filename:
+            return "Please select a video file.", 400
+
+        filename = secure_filename(uploaded_file.filename)
+
+        if not filename:
+            return "Invalid filename.", 400
+
+        # Avoid overwriting an existing uploaded file
+        name, extension = os.path.splitext(filename)
+        candidate = filename
+        counter = 1
+
+        while os.path.exists(os.path.join(UPLOAD_FOLDER, candidate)):
+            candidate = f"{name}_{counter}{extension}"
+            counter += 1
+
+        file_path = os.path.join(UPLOAD_FOLDER, candidate)
+
+        try:
+            uploaded_file.save(file_path)
+
+            with get_db_connection() as conn:
+                conn.execute(
+                    "INSERT INTO videos (title, filename) VALUES (?, ?)",
+                    (title, candidate)
+                )
+
+        except Exception:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            app.logger.exception("Video upload failed")
+            return "Video upload failed. Please check the server logs.", 500
 
         return redirect(url_for("index"))
+
     return render_template("upload.html")
+
+
+# --------------------------------------------------
+# WATCH VIDEO
+# --------------------------------------------------
 
 @app.route("/watch/<int:video_id>")
 def watch(video_id):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM videos WHERE id=?", (video_id,))
-    video = cur.fetchone()
-    conn.close()
+    with get_db_connection() as conn:
+        video = conn.execute(
+            "SELECT * FROM videos WHERE id = ?",
+            (video_id,)
+        ).fetchone()
+
+    if video is None:
+        abort(404)
+
     return render_template("watch.html", video=video)
 
-@app.route("/delete/<int:video_id>")
+
+# --------------------------------------------------
+# SERVE UPLOADED VIDEO
+# --------------------------------------------------
+
+@app.route("/videos/<path:filename>")
+def serve_video(filename):
+    return app.send_static_file(
+        os.path.relpath(
+            os.path.join(UPLOAD_FOLDER, filename),
+            STATIC_FOLDER
+        ).replace("\\", "/")
+    )
+
+
+# --------------------------------------------------
+# DELETE VIDEO
+# --------------------------------------------------
+
+@app.route("/delete/<int:video_id>", methods=["POST"])
 def delete(video_id):
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-    cur.execute("SELECT filename FROM videos WHERE id=?", (video_id,))
-    row = cur.fetchone()
+    with get_db_connection() as conn:
+        video = conn.execute(
+            "SELECT filename FROM videos WHERE id = ?",
+            (video_id,)
+        ).fetchone()
 
-    if row:
-        try:
-            os.remove(os.path.join(UPLOAD_FOLDER, row[0]))
-        except:
-            pass
+        if video is None:
+            abort(404)
 
-    cur.execute("DELETE FROM videos WHERE id=?", (video_id,))
-    conn.commit()
-    conn.close()
+        conn.execute(
+            "DELETE FROM videos WHERE id = ?",
+            (video_id,)
+        )
+
+    file_path = os.path.join(UPLOAD_FOLDER, video["filename"])
+
+    try:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+    except OSError:
+        app.logger.exception("Could not remove uploaded video file")
 
     return redirect(url_for("index"))
 
+
+# --------------------------------------------------
+# ERROR HANDLERS
+# --------------------------------------------------
+
+@app.errorhandler(404)
+def not_found(error):
+    return "Page or video not found.", 404
+
+
+@app.errorhandler(413)
+def file_too_large(error):
+    return "Video is too large. Maximum upload size is 1 GB.", 413
+
+
+# --------------------------------------------------
+# LOCAL DEVELOPMENT
+# --------------------------------------------------
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
